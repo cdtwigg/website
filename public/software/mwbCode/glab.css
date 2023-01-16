@@ -1,0 +1,207 @@
+  table {
+    border-style: none;
+    vertical-align: top;
+  }
+  body { 
+    background-color: white; 
+    color: black;
+    font-family: Georgia, "New Century Schoolbook", Times, serif;
+    font-size: small;
+  }
+  img { border-style: none; }
+  h1 {
+    font-weight: normal;
+  }
+  h2 {
+    font-weight: normal;
+    margin-top: 12px;
+    margin-bottom: 0px;
+  }
+  h3 {
+    font-size: small;
+    margin-top: 6px;
+    margin-bottom: 0px;
+  }
+  p {
+    margin-top: 0px;
+  }
+  a {
+    font-weight: bolder;
+    text-decoration: none; 
+  }
+  a:link {
+    color: #990000;
+  }
+  a:visited {
+    color: #666666;
+  }
+  ul {
+    margin-top: 1px;
+    margin-bottom: 15px;
+  }
+  blockquote {
+    text-indent: -4em;
+    margin-left: 6em;
+  }
+  blockquote p {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+  #menu {
+    background-color: transparent;
+  }
+  #menu a {
+    display: block;
+    color: #666666;
+  }
+  #menu a:hover {
+    color: white;
+    background-color: #990000;
+  }
+  #menu td {
+    text-align: center;
+    border-top: 1px solid #999999;
+    width: 100px;
+    margin: 0;
+    padding: 0;
+    font: 10px/15px Verdana, Lucida, Arial, sans-serif;
+    color: black;
+  }
+  #internalmenu td {
+    text-align: right;
+    margin: 0;
+    padding: 0;
+    font: 10px/15px Verdana, Lucida, Arial, sans-serif;
+    color: black;
+    background: white;
+  }
+  #internalmenu a {
+    color: #666666;
+    display: block;
+  }
+  #content {
+    clear: right;
+  }
+  #sidebar {
+    padding-right: 25px;
+    text-align: right;
+    margin-top: 0.5em;
+  }
+  #sidebar img {
+    margin: 45px 0 5px 0;
+  }
+  #sidebar h2 {
+    font-size: smaller;
+    font-weight: normal;
+    margin: 0;
+  }
+  #primarycontent {
+    padding-top: 25px;
+    line-height: 1.5;
+  }
+  #primarycontent h1 {
+    padding-bottom: 0px;
+    margin-bottom: 0px;
+  }
+  #footer {
+    clear: both;
+    padding-top: 20px;
+    padding-bottom: 10px;
+    font-size: x-small;
+  }
+  #projectlist img {
+    vertical-align: middle;
+    padding: 3px 10px 3px 3px;
+  }
+  #projectlist table {
+    padding-left: 15px;
+    padding-bottom: 15px;
+    border-collapse: collapse;
+    border-spacing: 0;
+  }
+  #summary td {
+    border-top: 1px solid #999999;
+    border-left: 0 none;
+    border-right: 0 none;
+    margin: 0;
+    padding-right: 5px;
+    padding-left: 5px;
+  }
+  #summary h2 {
+    font-family: "Arial Black", sans-serif;
+		font-size: xx-large;
+    color: #666666;
+    text-align: right;
+  }
+  #people {
+    list-style-type: none;
+    margin-left: 0;
+    padding-left: 10px;
+  }
+  div.abstract {
+    clear: both;
+    border-top: 1px solid #999999;
+    margin-top: 25px;
+    padding: 0;
+  }
+  div.abstract pre {
+    margin: 0 0 0 0;
+    font-size: xx-small;
+  }
+  div.abstract h2 {
+  }
+  div.abstract img {
+    float: right;
+    padding: 6px 0px 6px 12px;
+  }
+  div.abstract li {
+    margin: 0;
+  }
+  div.venue {
+    font-size: x-small;
+    color: #999999;
+  }
+  div.timestamp {
+    padding-top: 10px;
+    text-align: right;
+    color: #999999;
+    font-size: x-small;
+    display: block;
+    border-bottom: 1px solid #999999;
+		clear: both;
+  }
+  .hide {
+    display: none;
+  }
+  #courses td {
+    padding: 6px;
+  }
+  td.coursename {
+    font-weight: bolder;
+  }
+  div.yearnav {
+    margin: 0;
+    padding: 0 0 20px 10px;
+    border-bottom: 1px solid #000;
+  }
+  div.yearnav ul, ul.yearnavlist li {
+    margin: 0;
+    padding: 0;
+    display: inline;
+    list-style-type: none;
+  }
+  div.yearnav a:link, ul.yearnavlist a:visited {
+    float: left;
+    line-height: 14px;
+    font-weight: bold;
+    margin: 0 10px 4px 10px;
+    text-decoration: none;
+    color: #999;
+  }
+  div.yearnav a.current:link, ul.yearnavlist a.current:visited, ul.yearnavlist a:hover {
+    border-bottom: 4px solid #000;
+    padding-bottom: 2px;
+    background: transparent;
+    color: #000;
+  }
+  div.yearnav a:hover { color: #000; }

@@ -1,0 +1,248 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<!-- saved from url=(0031)http://www.cs.cmu.edu/~cdtwigg/ -->
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en"><head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1" />
+<link rel="StyleSheet" href="../glab.css" type="text/css" media="all" />
+<title>Many-Worlds Browsing Code</title>
+<style type="text/css" media="all">
+body {
+  background-color: white;
+  color: black;
+}
+
+img {
+  padding-top: 10px;
+  padding-left: 10px;
+  padding-bottom: 10px;
+  padding-right: 0;
+  float: right;
+}
+
+h2 {
+    border-top: 1px solid #999999;
+                clear: both;
+}
+
+
+#primarycontent {
+  max-width: 600px;
+  width: expression(document.body.clientWidth > 600? "600px": "auto" );
+  text-align: left;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#supportedObjects {
+  font-size: smaller;
+  font-style: normal;
+  width: 580px;
+}
+
+#supportedObjects th {
+  font-weight: lighter;
+}
+
+#supportedObjects td {
+  text-align: center;
+}
+
+#license {
+   font-size: smaller;
+}
+
+div.figure {
+  padding: 10px;
+  font-size: smaller;
+  font-style: italic;
+  float: right;
+}
+
+body {
+  text-align:center;
+}
+</style>
+<script type="text/javascript">
+
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', 'UA-1842343-2']);
+  _gaq.push(['_trackPageview']);
+
+  (function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+  })();
+
+</script>
+</head>
+<body>
+<div id="primarycontent">
+<h1>Many-Worlds Browsing Code</h1>
+
+<p>I am making the many-worlds browsing source code publically available.
+The license is BSD, feel free to use it however you like, and please let me 
+know if you find it useful.  A few general caveats:</p>
+<ul>
+<li>This is the code as it was roughly around January 2008 when I was
+submitting the "Backwards Steps in Rigid Body Simulation" paper.  It therefore
+has a number of bugfixes and improvements on top of the original binary MWB <a
+href="http://graphics.cs.cmu.edu/projects/mwb/demo/">demo</a>; however it
+doubtless has lots of new bugs and is (due to the backwards sampling support)
+no doubt more complicated than it needs to be.</li>
+<li>I will be happy to answer any questions about this software, but I warn you
+that my memory may be a bit fuzzy.  </li>
+<li>I don't really have the time or energy to do any active development on
+this, so if anyone else is interested, have at it!</li>
+<li>The bulk of the code should build on multiple platforms (Mac, Windows, and
+Linux).  In particular, the sampling engine usually ran on Linux while I was
+working on the paper.  The main application, however, is currently
+Windows-only.  The reason is that it relies on a number of Windows API calls
+related to multithreaded and network operations.  These could probably be
+swapped out with a smallish amount of effort.</li>
+</ul>
+
+<p>This code is broken into two parts:</p>
+<ul>
+<li><a href="libtwigg.tar.gz">libtwigg.tar.gz</a>.  This is a collection of routines and classes that are generally useful and were shared among all the code I wrote as a grad student.</li>
+<li><a href="mwb.tar.gz">mwb.tar.gz</a>.  This is the application that actually does the browsing.</li>
+</ul>
+
+<h2>Modified LCP solver for ODE</h2>
+
+<p>During the course of this project, I played around with a number of
+different rigid simulators.  In those days, bullet was in its infancy and had
+less-than-perfect joint support, and Novodex seemed to have problems generating
+realistic collisions (which would have made the paper a tough sell, since it
+was predicated on the fact that people are relatively insensitive to small
+errors during collision handling).  I ended up settling on ODE, which was at
+that point already quite mature and stable (and was being used in at least one
+commercial product, Softimage).  However, I found that ODE's native pivoting
+LCP solver produced very good results but was terrifically slow, and the
+alternative solver (based on projected Gauss-Seidel) didn't seem to converge
+quickly enough.  </p>
+
+<p>To help improve the speed of sampling, therefore, I decided to put some effort
+into speeding up ODE's pivoting solver.  A big part of the cost is due to the
+fact that ODE refactors the system matrix every time it adds or removes a row.  
+Since factoring a matrix is O(<i>n<sup>3</sup></i>) and this has to happen <i>n</i>
+times for <i>n</i> constraints, the total cost is actually O(<i>n<sup>4</sup></i>)!</p>
+
+<p>Traditionally, when you implement a pivoting LP solver, this is ameliorated somewhat
+by using incremental updates to the factorization: each time you add a row, you perform
+some operation that takes at most O(<i>n<sup>2</sup></i>) time to generate the new
+factorization.  Then the total cost is only O(<i>n<sup>3</sup></i>) (roughly, of course;
+the simplex method technically has worst case exponential performance).  Baraff took
+advantage of these fast matrix updates because he had access to a copy of 
+<a href="http://www.stanford.edu/group/SOL/software/lusol.html">LUSOL</a>, which now appears
+to be publically available but (at least as far as I could tell) wasn't at the
+time of submission of the original MWB work.  </p>
+
+<p>Updating LU factorizations is notoriously difficult due to pivoting (even
+very well-conditioned matrices cannot be factorized using LU without pivoting).  
+To get this up and running quickly, I needed to build something stable out of
+existing tools.  I therefore chose to use and update a QR factorization.  Updates
+to QR decompositions are much simpler than updates to LU decompositions; you get
+a &quot;spike&quot; below the diagonal and just need to eliminate it.  See 
+my <a href="cdtwiggThesis.pdf">thesis</a> for details.</p>
+
+<p>An updated version of ODE's LCP solver that uses QR updates can be found 
+<a href="lcp_ctwigg.cpp">here</a>.</p>
+
+<h2>Required libraries</h2>
+
+<p>Since the project was frozen in 2008, a lot of these library dependencies are pretty ancient.  If you get it
+working with more modern versions of everything, let me know and I'll put the updated version here, or maybe
+just move the whole mess into github.  </p>
+
+<ul>
+<li>Andrew Willmott's <a href="http://www.cs.cmu.edu/~ajw/doc/vl.html">Vector library</a>.  This code
+uses a slight variant on the released version where I've gone through and namespaced everything; find
+it <a href="vl-1.3.2-ctwigg.tar.gz">here</a>.</li>
+<li>I used <a href="http://www.wxwidgets.org/">wxWidgets</a> for all my UI
+code.  The version I was using in 2008 was wxWidgets 2.8; it could probably be
+made to work on newer versions without too much effort.</li>
+<li><a href="http://www.geometrictools.com/">WildMagic</a>.  It looks like the version
+I was using was maybe version 4, but I can't remember for sure.  My recollection is that
+this dependency is actually pretty thin (just a couple of utility functions) and so could
+probably be removed without too much effort; I'm pretty sure I was able to remove the
+dependency for the downloadable demo.  </li>
+<li><a href="http://glew.sourceforge.net/">OpenGL Extension Wrangler</a>.  </li>
+<li><a href="http://bulletphysics.org/wordpress/">Bullet Physics</a>.  As noted
+on the webpage for the downloadable demo, this dependency is removable with
+some <code>#ifdef</code>s (the only required physics library is
+ODE)</li>
+<li>Novodex (no link).  This is probably not rescuable; I did a lot of
+development with an early developer's release of the library, but I don't think
+NVIDIA is supporting that any
+more.  <code>#ifdef</code> it out.  </li>
+<li><a href="http://www.openexr.com/">OpenEXR</a>.  This dependency is
+removable; for some of the paper images I was dumping out super-high-res HDR
+images.</li>
+<li><a href="http://www.coin-or.org/Clp/">CLP</a>.  I'm completely stumped why
+I list this as a dependency, which probably means it is removable.</li>
+<li><a href="http://software.intel.com/en-us/articles/intel-mkl/">MKL</a>.  I
+was able to remove this for the released version using a little 3x3 symmetric
+Jacobi solve, so this depency is probably not really necessary any more.  </li>
+</ul>
+
+<h2>Stuff in libtwigg</h2>
+
+<p>Some of libtwigg is just code poached from elsewhere (all of it either BSD-licensed or public domain, I hope; if not let me know and I'll remove it)..  Some of it might be useful to other people.  Here's a partial list:</p>
+
+<ul>
+<li>3x3 block sparse matrices</li>
+<li>axis-aligned bounding box tree</li>
+<li>extensions to vl</li>
+<li>.obj file support</li>
+<li>.mat file support (for exporting to Matlab)</li>
+<li>simplified wrappers for BLAS and LAPACK</li>
+<li>wrappers for the NAG libraries</li>
+<li>wrappers for functionality/data types in WildMagic</li>
+</ul>
+
+<div id="license">
+<h2>License</h2>
+<p>Copyright 2002-2008 Christopher D. Twigg. All rights reserved.</p>
+
+<p>Redistribution and use in source and binary forms, with or without modification, are
+permitted provided that the following conditions are met:</p>
+<ol>
+<li>Redistributions of source code must retain the above copyright notice, this list of
+    conditions and the following disclaimer.</li>
+<li>Redistributions in binary form must reproduce the above copyright notice, this list
+    of conditions and the following disclaimer in the documentation and/or other materials
+    provided with the distribution.</li>
+</ol>
+<p>THIS SOFTWARE IS PROVIDED BY CHRISTOPHER D. TWIGG &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED
+WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL CHRISTOPHER D. TWIGG OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+</p>
+<p>The views and conclusions contained in the software and documentation are those of the
+authors and should not be interpreted as representing official policies, either expressed
+or implied, of Carnegie Mellon University or Cornell University.</p>
+</div>
+
+
+<div id="footer">
+<table>
+<tr>
+<td style="padding-right: 20px;" >
+<a href="/"><img alt="Carnegie Mellon Graphics" style="padding: 0;" src="logoXSm.png" width="300" height="32" /></a>
+</td>
+<td style="padding-left: 20px; ">
+<a style="align: bottom;" href="http://www.graphics.cornell.edu/"><img alt="Cornell University" style="padding: 0;" src="cu_logo_unstyled.png" height="45" width="180" /></a>
+</td>
+</tr>
+</table>
+</div>
+
+</div>
+</body>
+</html>
+

@@ -1,0 +1,188 @@
+#!/usr/local/bin/perl -w
+
+# rwho: queries a set of remote machines to find who all is logged in.  Useful
+# for figuring out what kinds of resources are available on a cluster, for
+# example, in case no better cluster management solution is available.  Also
+# prints uptime to help determine if any machines have crashed.
+#
+# The implementation is essentially identical to the rps script which can
+# be found in the same place you found this.  See the other script for useful
+# commentary.
+#
+# written by Christopher Twigg
+# http://www.cs.cmu.edu/~cdtwigg/software
+#
+# Released under the BSD license:
+# http://www.opensource.org/licenses/bsd-license.php
+#
+
+use strict;
+use IO::Select();
+use IO::File();
+
+my @machines = ( "anim1.graphics.cs.cmu.edu", "anim2.graphics.cs.cmu.edu", "flip.graphics.cs.cmu.edu" );
+my $rsh_command = "/usr/local/bin/ssh";
+
+my %userCount = ();
+my %uptime = ();
+my %load = ();
+my %users = ();
+
+foreach my $machine (@machines)
+{
+	$uptime{$machine} = "";
+	$userCount{$machine} = "";
+	$users{$machine} = "";
+	$load{$machine} = "";
+}
+
+while(1)
+{
+my $read_set = new IO::Select();
+my %filehandles = ();
+my %pids = ();
+foreach my $machine (@machines)
+{
+	my $pid;
+	my $fh = IO::File->new();
+	die "Can't fork: $!" unless defined($pid = open($fh, "-|"));
+	if( $pid )
+	{
+		# parent
+		$filehandles{$machine} = $fh;
+		$read_set->add($fh);
+		$pids{$machine} = $pid;
+	}
+	else
+	{
+		$ENV{PATH} = "/bin:/usr/bin"; # Minimal PATH.
+		exec( $rsh_command,
+			$machine, "w" ) or die "Couldn't exec rsh: $!";
+	}
+}
+
+my %data = ();
+
+foreach my $machine (@machines)
+{
+	$data{$machine} = "";
+}
+
+while(my @ready = $read_set->can_read)
+{
+	foreach my $rh (@ready)
+	{
+		my $machine;
+		foreach my $m ( @machines )
+		{
+			if( $rh == $filehandles{$m} )
+			{
+				$machine = $m;
+			}
+		}
+
+		die " couldn't find socket $rh" unless( defined $machine );
+		
+		my $buf;
+		my $retval = read( $rh, $buf, 1024, 0 );
+
+		if($retval)
+		{
+			$data{$machine} = $data{$machine} . $buf;
+		}
+		else
+		{
+			#socket closed
+			$read_set->remove($rh);
+			close($rh);
+			waitpid( $pids{$machine}, 0 );
+		}
+	}
+
+	system( "clear" );
+	
+	# Want to update status for all machines
+	print "   host         uptime                 users(idle)\n";
+	foreach my $machine (@machines)
+	{
+		if( $data{$machine} =~ /(\S+) user/  )
+		{
+			$userCount{$machine} = $1;
+		}
+
+		if( $data{$machine} =~ /load average: (\S+, \S+, \S+)/ )
+		{
+			$load{$machine} = $1;
+		}
+
+		if( $data{$machine} =~ /up (.*),\s+\S+ user/ )
+		{
+			$uptime{$machine} = $1;
+		}
+
+		if( $data{$machine} =~ /refused/ )
+		{
+			$uptime{$machine} = "down";
+			$load{$machine} = "n/a";
+			$userCount{$machine} = "n/a";
+		}
+
+		$users{$machine} = "";
+
+		my %minIdle = ();
+		my %minIdleStr = ();
+		my @lines = split /\n/, $data{$machine};
+		foreach my $line (@lines)
+		{
+			if( $line =~ /USER/ ) {next;}
+			if( $line =~ /tty/ || $line =~ /pts/ )
+			{
+				(my $uid, my $tty, my $from, my $login, my $idle, my $jcpu, my $pcpu, my $what)
+					= unpack("A9A9A16A9A7A7A7A20", $line);
+
+				my $idlesec;
+				if( $idle =~ /(.*)day/ )
+				{
+					$idlesec = $1*86400;
+				}
+				elsif( $idle =~ /(.*)s/ )
+				{
+					$idlesec = $1;
+				}
+				elsif( $idle =~ /(.*):(.*)m/ )
+				{
+					$idlesec = 60*$2 + 3600*$1;
+				}
+				elsif( $idle =~ /(.*):(.*)/ )
+				{
+					$idlesec = $2 + 60*$1;
+				}
+				else
+				{
+					$idlesec = 0;
+				}
+
+				unless( (defined $minIdle{$uid}) && ($minIdle{$uid} < $idlesec) )
+				{
+					$minIdle{$uid} = $idlesec;
+					$idle =~ s/^\s+//;
+					$idle =~ s/\s+$//;
+					$minIdleStr{$uid} = $idle;
+				}
+			}
+		}
+
+		foreach my $uid( keys %minIdleStr )
+		{
+			$users{$machine} = "$users{$machine} $uid($minIdleStr{$uid})";
+		}
+
+		my $uc = $userCount{$machine}; 
+		if( $uc ne "" && $uc == 0 ) { $uc = "-"; }
+		my $res = pack "A13 A20 A40", $machine, $uptime{$machine}, $users{$machine};
+		print "$res\n";
+	}
+}
+
+sleep(60);
+}

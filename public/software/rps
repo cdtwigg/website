@@ -1,0 +1,191 @@
+#!/usr/local/bin/perl -w
+
+# rps: queries a set of remote machines to find all processes that
+# are taking more than 10% of the CPU.  Useful for figuring out
+# what kinds of resources are available on a cluster, for example,
+# in case no better cluster management solution is available.
+#
+# written by Christopher Twigg
+# http://www.cs.cmu.edu/~cdtwigg/software
+#
+# Released under the BSD license:
+# http://www.opensource.org/licenses/bsd-license.php
+#
+
+use strict;
+use IO::Select();
+use IO::File();
+
+# This might be 'rsh' in Kerberized environments
+my $rsh_command = "/usr/local/bin/ssh";
+my @machines = ( "anim1.graphics.cs.cmu.edu", "anim2.graphics.cs.cmu.edu", "flip.graphics.cs.cmu.edu" );
+
+my $myHostname = `hostname`;
+
+my $verbose = 0;
+
+# The argument parsing could certainly be made better;
+# right now it only checks whether it is in verbose mode
+# or not.
+foreach my $arg( @ARGV )
+{
+  $arg =~ s/-//g;
+  if( $arg eq "v" )
+  {
+    $verbose = 1;
+    print "Setting Verbose...\n";
+  }
+  else
+  {
+    print "Usage: rps [-v]\n";
+    exit(1);
+  }
+}
+
+# for each machine, we will maintain a list of processes on that machine
+my %processes = ();
+foreach my $machine (@machines)
+{
+  $processes{$machine} = "";
+}
+
+# The outer loop runs forever until someone hits Ctrl-C
+while(1)
+{
+  # We use a select loop so that as information comes in about any
+  # machine we can update its info
+  my $read_set = new IO::Select();
+  my %filehandles = ();
+  my %pids = ();
+
+  # For each machine, we fork a process that runs ps ax on the remote machine
+  foreach my $machine (@machines)
+  {
+    my $pid;
+    my $fh = IO::File->new();
+    die "Can't fork: $!" unless defined($pid = open($fh, "-|"));
+    if( $pid )
+    {
+      # parent process
+      $filehandles{$machine} = $fh;
+      $read_set->add($fh);
+      $pids{$machine} = $pid;
+    }
+    else
+    {
+      # Child process
+      # clear the environment for security reasons
+      $ENV{PATH} = "/bin:/usr/bin"; # Minimal PATH.
+
+      if( $verbose )
+      {
+        exec( $rsh_command, $machine, "ps -eo user,pcpu,args" ) or die "Couldn't exec rsh: $!";
+      }
+      else
+      {
+        exec( $rsh_command, $machine, "ps -eo user,comm,pcpu" ) or die "Couldn't exec rsh: $!";
+      }
+    }
+  }
+  
+  # For each machine we will maintain a string that contains the full result
+  # that has gotten returned so far
+  # This could be made more efficient if we did the parsing in-line; that is,
+  # rather than retaining the full text from "ps ax" and re-parsing it at
+  # each loop we just kept track of the relevant processes and parsed it as
+  # the data came across
+  my %data = ();
+  
+  foreach my $machine (@machines)
+  {
+    $data{$machine} = "";
+  }
+
+  while(my @ready = $read_set->can_read)
+  {
+    # for any socket that has data available, we pull the data off the line
+    # and stuff it in the %data hash for the appropriate machine
+    foreach my $rh (@ready)
+    {
+      my $machine;
+      foreach my $m ( @machines )
+      {
+        if( $rh == $filehandles{$m} )
+        {
+          $machine = $m;
+        }
+      }
+  
+      die "Couldn't find socket $rh" unless( defined $machine );
+      
+      my $buf;
+      my $retval = read( $rh, $buf, 1024, 0 );
+  
+      if($retval)
+      {
+        $data{$machine} = $data{$machine} . $buf;
+      }
+      else
+      {
+        #socket closed
+        $read_set->remove($rh);
+        close($rh);
+        waitpid( $pids{$machine}, 0 );
+      }
+    }
+  
+    system( "clear" );
+    
+    # Want to update status for all machines
+    # we'll parse all the processes on that machine and find the
+    # ones that are 'significant' as defined by our pcpu threshold
+    print " host             processes\n";
+    foreach my $machine (@machines)
+    {
+      $processes{$machine} = "";
+
+      unless( $data{$machine} )   { next; }
+      my @lines = split /\n/, $data{$machine};
+      foreach my $line (@lines)
+      {
+        if( $line =~ "^USER" )
+        {
+          next;
+        }
+  
+        my $uid; 
+        my $command; 
+        my $pcpu;
+        chomp $line;
+
+        # this is probably pretty fragile and may depend on the particular
+        # implementation of ps on the remote machine
+        if( $verbose )
+        {
+          ($uid, $pcpu, $command) = split /\s+/, $line, 3;
+        }
+        else
+        {
+          ($uid, $command, $pcpu) = 
+             unpack( "A9A16A5", $line );
+        }
+  
+        unless( $pcpu ) { next; }
+        unless( $uid ) { next; }
+        unless( $command ) { next; }
+  
+        if( $pcpu > 10.0 )
+        {
+          $pcpu =~ s/\s+$//;
+          $pcpu =~ s/^\s+//;
+          $processes{$machine} .= "$uid:$command ($pcpu\%); ";
+        }
+      }
+      
+      my $res = pack "A13", $machine;
+      print "$res $processes{$machine}\n";
+    }
+  }
+  
+  sleep(60);
+}
